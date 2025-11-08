@@ -96,15 +96,21 @@ const emailRegister = async (req, res) => {
       .single();
 
     if (insertError) {
-      // Log detailed error for debugging
+      // Log detailed error for debugging (always show in production for troubleshooting)
+      console.error('Supabase insert error:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details,
+        hint: insertError.hint
+      });
       return res.status(500).json({
         success: false,
         error: 'Failed to create user in database',
-        details: process.env.NODE_ENV === 'development' ? {
+        details: {
           message: insertError.message,
           code: insertError.code,
-          details: insertError.details
-        } : undefined
+          hint: insertError.hint || 'Check Supabase table structure and permissions'
+        }
       });
     }
     
