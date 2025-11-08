@@ -365,8 +365,8 @@ const createPayment = async (req, res) => {
         break;
       case 'stripe':
         paymentResult = await require('../services/stripePaymentService').createPaymentIntent(order);
-        // Stripe's mock mode is determined by client_secret
-        isMockMode = !paymentResult.client_secret || paymentResult.client_secret.includes('dummy');
+        // Stripe's mock mode is determined by note field or missing client_secret
+        isMockMode = paymentResult.note !== undefined || !paymentResult.client_secret || !process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_dummy';
         break;
       case 'paypal':
         paymentResult = await require('../services/paypalPaymentService').createOrder(order);
