@@ -11,9 +11,7 @@ import {
   CircularProgress,
   Divider,
   Stack,
-  Avatar,
   Paper,
-  Badge,
   Snackbar,
 } from '@mui/material';
 import {
@@ -37,7 +35,6 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRegion } from '../../hooks/useRegion';
 import { useAuth } from '../../contexts/AuthContext';
-import { getRegionConfig } from '../../config/regionConfig';
 import api from '../../services/api';
 import StripePayment from '../../components/Payment/StripePayment';
 import PayPalPayment from '../../components/Payment/PayPalPayment';
@@ -63,13 +60,12 @@ const Pay: React.FC = () => {
   // Listen to authUser changes to ensure Alert updates in real-time
   useEffect(() => {
     if (authUser) {
-
+      // Update UI when subscription changes
     }
-  }, [authUser?.subscription_type, authUser?.subscription_expires_at]);
+  }, [authUser]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [orderNo, setOrderNo] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -160,7 +156,6 @@ const Pay: React.FC = () => {
     setQrCode(null);
     setShowPaymentForm(false);
     setError(null);
-    setSuccessMessage(null);
     try {
 
       // Show success message
@@ -275,7 +270,6 @@ const Pay: React.FC = () => {
     try {
       setProcessing(true);
       setError(null);
-      setSuccessMessage(null);
       setPaymentUrl(null);
       setClientSecret(null);
       setPaypalOrderId(null);
@@ -345,11 +339,7 @@ const Pay: React.FC = () => {
         return;
       } else {
         if (data.order_no) {
-          setSuccessMessage(
-            `✅ Payment order created successfully!\n` +
-            `Order Number: ${data.order_no}\n\n` +
-            (data.note || 'Note: Configure real payment API keys to complete the payment.')
-          );
+          // Order created successfully
         } else {
           setError('Payment creation failed: ' + (data.note || 'Unknown error'));
           setSnackbarMessage('Payment creation failed');

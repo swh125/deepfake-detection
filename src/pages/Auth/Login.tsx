@@ -19,7 +19,7 @@ import toast from 'react-hot-toast';
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login, getWechatQRCode, wechatLogin, googleLogin, loading: authLoading } = useAuth();
-  const { region, isChina } = useRegion();
+  const { isChina } = useRegion();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,6 @@ const Login: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [wechatAuthUrl, setWechatAuthUrl] = useState('');
   const [isWechatMock, setIsWechatMock] = useState(true);
-  const [wechatTicket, setWechatTicket] = useState('');
   const [showGoogleDialog, setShowGoogleDialog] = useState(false);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -56,7 +55,6 @@ const Login: React.FC = () => {
       setQrCodeUrl(qrData.qrCodeUrl);
       setWechatAuthUrl(qrData.authUrl || '');
       setIsWechatMock(qrData.isMock);
-      setWechatTicket(qrData.ticket);
       setShowWechatQR(true);
       
       // 如果是真实OAuth，可以跳转到授权页面，或者显示二维码让用户扫码
@@ -106,6 +104,7 @@ const Login: React.FC = () => {
 
         // 更新AuthContext
         if (token && user) {
+          // token and user are used implicitly by storing to localStorage
           // 使用wechatLogin来更新状态（但这里需要直接设置）
           // 或者直接调用APIUpdate user information
           localStorage.setItem('auth_token', token);
