@@ -147,7 +147,7 @@ const Pay: React.FC = () => {
         setSelectedPlan(plan);
       }
     }
-  }, [plans]); // plans is now memoized with useMemo, won't cause infinite loop
+  }, [plans, selectedPlan]); // plans is now memoized with useMemo, won't cause infinite loop
 
   // Handle payment success
   const handlePaymentSuccess = async (orderNo: string) => {
@@ -280,8 +280,6 @@ const Pay: React.FC = () => {
       setClientSecret(null);
       setPaypalOrderId(null);
 
-      const apiBaseUrl = getRegionConfig().apiBaseUrl;
-
       // Use configured api instance (includes token interceptor, will automatically add Authorization header)
       const response = await api.post('/api/v1/payment/create', {
         amount: selectedPlan.price,
@@ -383,28 +381,6 @@ const Pay: React.FC = () => {
     } finally {
       setProcessing(false);
     }
-  };
-
-  const handleCreatePayment = async () => {
-    // Check if logged in
-    if (!isAuthenticated) {
-      setShowLoginDialog(true);
-      return;
-    }
-
-    if (!selectedPlan || !selectedMethod) {
-      setError('Please select a plan and payment method');
-      return;
-    }
-
-    // Prevent duplicate submission
-    if (processing) {
-
-      return;
-    }
-
-    // Continue payment flow
-    await proceedWithPayment(selectedMethod);
   };
 
   if (regionLoading) {

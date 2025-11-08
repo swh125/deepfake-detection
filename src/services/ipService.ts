@@ -1,7 +1,5 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
 export interface IPInfo {
   ip: string;
   country: string | null;
@@ -252,7 +250,7 @@ const saveIPToBackend = async (ipInfo: IPInfo): Promise<void> => {
     // Call backend API to save, pass force parameter and real IP info to let backend save to correct database
     // Backend will judge based on force parameter whether to save to MySQL (cn) or Supabase (global)
     // Only pass IP and country code, don't pass city, province and coordinates
-    const response = await axios.get(`${apiBaseUrl}/api/v1/utils/detect-ip`, {
+    await axios.get(`${apiBaseUrl}/api/v1/utils/detect-ip`, {
       params: { 
         force,
         ip: ipInfo.ip !== 'unknown' ? ipInfo.ip : undefined, // Pass real IP

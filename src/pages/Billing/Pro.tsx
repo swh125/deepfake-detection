@@ -13,9 +13,6 @@ import {
   ListItemText,
   Chip,
   Divider,
-  Stack,
-  Paper,
-  Alert,
 } from '@mui/material';
 import {
   CheckCircle,
