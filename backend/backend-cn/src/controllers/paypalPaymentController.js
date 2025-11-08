@@ -16,9 +16,9 @@ const handleCallback = async (req, res) => {
     // Should actually get order_no from callback
     // await db.from('payment_orders').update({...}).eq('order_no', order_no);
 
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success`);
+    res.redirect(`${(process.env.FRONTEND_URL || 'http://localhost:3000').trim()}/payment/success`);
   } catch (error) {
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/cancel`);
+    res.redirect(`${(process.env.FRONTEND_URL || 'http://localhost:3000').trim()}/payment/cancel`);
   }
 };
 
