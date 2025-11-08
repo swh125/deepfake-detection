@@ -69,8 +69,8 @@ const createOrder = async (order) => {
         description: order.description || 'Deepfake Detection Service'
       }],
       application_context: {
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success`,
-        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/cancel`
+        return_url: `${(process.env.FRONTEND_URL || 'http://localhost:3000').trim()}/payment/success`,
+        cancel_url: `${(process.env.FRONTEND_URL || 'http://localhost:3000').trim()}/payment/cancel`
       }
     });
 
