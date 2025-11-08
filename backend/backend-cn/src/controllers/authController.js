@@ -66,12 +66,13 @@ const emailRegister = async (req, res) => {
     
     const ipInfo = detectIPLocation(ipToCheck);
 
-    // backend-cn always uses cn (CloudBase), but record IP information
-    if (ipInfo.isChina || ipToCheck === '127.0.0.1' || ipToCheck === '::1' || ipToCheck === 'needs-api-detection') {
-
-    } else {
-      // If foreign IP detected, log warning but continue using cn (because this is backend-cn)
-
+    // backend-cn only accepts China IP addresses
+    // If foreign IP detected (not localhost), reject registration
+    if (!ipInfo.isChina && ipToCheck !== '127.0.0.1' && ipToCheck !== '::1' && ipToCheck !== 'needs-api-detection') {
+      return res.status(403).json({
+        success: false,
+        error: 'This API is only for China region users. Please use the global API (backend-global) to register.'
+      });
     }
 
     // If frontend explicitly specified region, log it (but backend-cn always uses cn)
@@ -207,269 +208,36 @@ const emailLogin = async (req, res) => {
       });
     }
 
+    // backend-cn only uses CloudBase (China system)
+    // Check IP: if user is not in China, reject login (must use backend-global)
+    const { detectIPLocation } = require('../utils/ipDetector');
+    
+    // Priority to use IP passed from frontend (if exists)
+    let ipToCheck = clientIP;
+    const frontendIP = req.query.ip || req.body.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+    if ((clientIP === 'needs-api-detection' || clientIP === '127.0.0.1' || clientIP === '::1') && frontendIP) {
+      if (frontendIP !== '127.0.0.1' && frontendIP !== '::1' && frontendIP !== 'needs-api-detection') {
+        ipToCheck = frontendIP;
+      }
+    }
+    
+    const ipInfo = detectIPLocation(ipToCheck);
+    
+    // If foreign IP detected (not localhost), reject login
+    if (!ipInfo.isChina && ipToCheck !== '127.0.0.1' && ipToCheck !== '::1' && ipToCheck !== 'needs-api-detection') {
+      return res.status(403).json({
+        success: false,
+        error: 'This API is only for China region users. Please use the global API (backend-global) to login.'
+      });
+    }
+
     // Find user in CloudBase (backend-cn only uses CloudBase)
     const user = await cloudbaseService.findUserByEmail(email);
     
     if (!user) {
-
-      // Check if already registered in Supabase (global database)
-      const { supabaseGlobal } = require('../config/database');
-      if (supabaseGlobal) {
-        try {
-
-          const { data: userInSupabase, error: supabaseCheckError } = await supabaseGlobal
-            .from('users')
-            .select('id, email, region, password_hash')
-            .eq('email', email)
-            .maybeSingle();
-
-          // If user found in Supabase, allow cross-region login (verify password)
-          if (userInSupabase && !supabaseCheckError) {
-
-            // Verify password (use password hash from Supabase)
-            if (!userInSupabase.password_hash) {
-
-              return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-              });
-            }
-
-            const isValid = await bcrypt.compare(password, userInSupabase.password_hash);
-            if (!isValid) {
-
-              return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-              });
-            }
-
-            // Generate token (use global region)
-            const token = generateToken({
-              userId: userInSupabase.id,
-              email: userInSupabase.email,
-              region: 'global'
-            });
-            
-            // Save session to Supabase
-
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 7);
-            
-            try {
-              await supabaseGlobal
-                .from('user_sessions')
-                .insert({
-                  user_id: userInSupabase.id,
-                  token,
-                  region: 'global',
-                  ip_address: clientIP,
-                  expires_at: expiresAt.toISOString()
-                });
-
-            } catch (sessionError) {
-
-            }
-            
-            // Query user's complete information (including subscription info)
-            let fullUser = null;
-            const { data: userData, error: userError } = await supabaseGlobal
-              .from('users')
-              .select('id, email, name, subscription_type, subscription_expires_at')
-              .eq('id', userInSupabase.id)
-              .single();
-            
-            if (userData && !userError) {
-              fullUser = userData;
-            } else {
-              // If query fails, use basic information
-              fullUser = {
-                id: userInSupabase.id,
-                email: userInSupabase.email,
-                name: null,
-                subscription_type: null,
-                subscription_expires_at: null
-              };
-            }
-            
-            // If subscription field is null, calculate membership status from payment_orders
-            if (!fullUser.subscription_type || !fullUser.subscription_expires_at) {
-
-              try {
-
-                // 查询所有已支付的订单，用于累加计算会员状态
-                let { data: allPaidOrders, error: ordersError } = await supabaseGlobal
-                  .from('payment_orders')
-                  .select('payment_provider_response, paid_at, payment_status, created_at, updated_at, description')
-                  .eq('user_id', fullUser.id)
-                  .eq('payment_status', 'paid')
-                  .order('paid_at', { ascending: true });
-                
-                // 如果 paid_at 字段不存在，尝试使用 created_at 排序
-                if (ordersError && ordersError.code === '42703') {
-
-                  const result = await supabaseGlobal
-                    .from('payment_orders')
-                    .select('payment_provider_response, payment_status, created_at, updated_at, description')
-                    .eq('user_id', fullUser.id)
-                    .eq('payment_status', 'paid')
-                    .order('created_at', { ascending: true });
-                  allPaidOrders = result.data;
-                  ordersError = result.error;
-                }
-                
-                // 如果 description 字段不存在，只查询 payment_provider_response
-                if (ordersError && ordersError.code === '42703' && ordersError.message?.includes('description')) {
-
-                  const result = await supabaseGlobal
-                    .from('payment_orders')
-                    .select('payment_provider_response, payment_status, created_at, updated_at, paid_at')
-                    .eq('user_id', fullUser.id)
-                    .eq('payment_status', 'paid')
-                    .order('created_at', { ascending: true });
-                  allPaidOrders = result.data;
-                  ordersError = result.error;
-                }
-                
-                // 如果还是失败，尝试不排序，直接查询所有
-                if (ordersError && ordersError.code === '42703') {
-
-                  const result = await supabaseGlobal
-                    .from('payment_orders')
-                    .select('payment_provider_response, payment_status, created_at, updated_at')
-                    .eq('user_id', fullUser.id)
-                    .eq('payment_status', 'paid');
-                  allPaidOrders = result.data;
-                  ordersError = result.error;
-                  // 手动按 created_at 排序
-                  if (allPaidOrders && allPaidOrders.length > 0) {
-                    allPaidOrders.sort((a, b) => {
-                      const timeA = new Date(a.created_at || 0).getTime();
-                      const timeB = new Date(b.created_at || 0).getTime();
-                      return timeA - timeB;
-                    });
-                  }
-                }
-
-                if (!ordersError && allPaidOrders && allPaidOrders.length > 0) {
-
-                  const now = new Date();
-                  let currentExpiresAt = null;
-                  let finalSubscriptionType = null;
-                  
-                  // 按时间顺序处理每个订单，累加天数
-                  for (const order of allPaidOrders) {
-                    // 从 order.description 或 payment_provider_response.description 中提取描述
-                    let planDescription = order.description;
-                    if (!planDescription && order.payment_provider_response) {
-                      if (typeof order.payment_provider_response === 'string') {
-                        try {
-                          const parsed = JSON.parse(order.payment_provider_response);
-                          planDescription = parsed.description;
-                        } catch (e) {
-
-                        }
-                      } else if (typeof order.payment_provider_response === 'object') {
-                        planDescription = order.payment_provider_response.description;
-                      }
-                    }
-                    
-                    if (!planDescription) {
-
-                      continue;
-                    }
-                    
-                    const descLower = planDescription.toLowerCase();
-                    let subscriptionType = null;
-                    
-                    if (descLower.includes('monthly') || descLower.includes('pro monthly')) {
-                      subscriptionType = 'monthly';
-                    } else if (descLower.includes('yearly') || descLower.includes('pro yearly')) {
-                      subscriptionType = 'yearly';
-                    }
-                    
-                    if (!subscriptionType) {
-
-                      continue;
-                    }
-                    
-                    // 使用 paid_at，如果不存在则使用 updated_at 或 created_at
-                    const paidAtStr = order.paid_at || order.updated_at || order.created_at;
-                    if (!paidAtStr) {
-
-                      continue;
-                    }
-                    
-                    const paidAt = new Date(paidAtStr);
-                    let daysToAdd = 0;
-                    
-                    if (subscriptionType === 'monthly') {
-                      daysToAdd = 30;
-                    } else {
-                      daysToAdd = 365;
-                    }
-                    
-                    // 判断是否累加或重新开始
-                    // Rules:如果当前到期时间存在且 > 订单支付时间（会员未过期），累加天数
-                    //      如果当前到期时间不存在或 <= 订单支付时间（会员已过期），从订单支付时间开始计算
-                    const hadActiveSubscription = currentExpiresAt && currentExpiresAt > paidAt;
-                    
-                    if (hadActiveSubscription) {
-                      // 会员未过期，累加天数
-                      currentExpiresAt = new Date(currentExpiresAt.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-
-                    } else {
-                      // 会员已过期或没有会员，从订单支付时间开始计算
-                      const reason = !currentExpiresAt ? '首次购买' : '会员已过期';
-                      currentExpiresAt = new Date(paidAt.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-
-                    }
-                    
-                    finalSubscriptionType = subscriptionType; // 使用最后一个订单的类型
-                  }
-                  
-                  // 检查最终结果是否过期
-                  if (currentExpiresAt && currentExpiresAt > now) {
-                    fullUser.subscription_type = finalSubscriptionType;
-                    fullUser.subscription_expires_at = currentExpiresAt.toISOString();
-                    const daysRemaining = Math.ceil((currentExpiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-
-                  } else {
-                    fullUser.subscription_type = null;
-                    fullUser.subscription_expires_at = null;
-
-                  }
-                } else {
-
-                }
-              } catch (calcError) {
-
-                // 保持原有的 null 值，不覆盖
-              }
-            }
-
-            return res.json({
-              success: true,
-              data: {
-                user: {
-                  id: fullUser.id,
-                  email: fullUser.email,
-                  name: fullUser.name || null,
-                  subscription_type: fullUser.subscription_type || null,
-                  subscription_expires_at: fullUser.subscription_expires_at || null,
-                  region: 'global'
-                },
-                token
-              }
-            });
-          }
-        } catch (checkError) {
-
-        }
-      } else {
-
-      }
-
+      // User not found in CloudBase
+      // backend-cn only supports China region users
+      // If user registered in global region, they need to register again in China region
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'

@@ -32,33 +32,19 @@ const emailRegister = async (req, res) => {
       });
     }
 
-    // Always automatically determine which database to use based on IP
-    // Foreign IP → Supabase (global)
-    // China IP → CloudBase (cn)
-    let region;
+    // backend-global always uses Supabase for registration (global region only)
+    // No cross-region support: users must register separately in each region
+    // Check IP: if user is in China, reject registration (must use backend-cn)
     const { detectIPLocation } = require('../utils/ipDetector');
     const ipInfo = detectIPLocation(clientIP);
-
-    // If IP detection shows China, use cn (CloudBase)
-    // If local IP (127.0.0.1 or ::1), also use cn (development environment)
-    if (ipInfo.isChina || clientIP === '::1' || clientIP === '127.0.0.1') {
-      region = 'cn';
-
-    } else {
-      // Clearly foreign IP, use global (Supabase)
-      region = 'global';
-
+    
+    if (ipInfo.isChina && clientIP !== '127.0.0.1' && clientIP !== '::1') {
+      return res.status(403).json({
+        success: false,
+        error: 'This API is only for global region users. Please use the China API (backend-cn) to register.'
+      });
     }
 
-    // If frontend explicitly specified region, use frontend's (but log it)
-    if (req.body.region && req.body.region !== region) {
-
-      // Still use IP detection result, because it's more accurate
-
-    }
-
-    // backend-global always uses Supabase for registration
-    // Regardless of IP detection, always save to Supabase
     const supabase = getSupabaseClient();
     
     if (!supabase) {
@@ -91,23 +77,6 @@ const emailRegister = async (req, res) => {
       });
     }
 
-    // Check if already registered in CloudBase (for cross-region login support)
-    const { cloudbaseApp } = require('../config/database');
-    if (cloudbaseApp) {
-      try {
-        const cloudbaseService = require('../services/cloudbaseService');
-        const existingUserInCloudBase = await cloudbaseService.findUserByEmail(email);
-        
-        if (existingUserInCloudBase) {
-          return res.status(400).json({
-            success: false,
-            error: 'Email already registered'
-          });
-        }
-      } catch (checkError) {
-        // Ignore CloudBase check errors, continue with Supabase registration
-      }
-    }
 
     // Always use Supabase for registration (backend-global)
     // Hash password
@@ -216,6 +185,16 @@ const emailLogin = async (req, res) => {
     }
 
     // backend-global only uses Supabase (international system)
+    // Check IP: if user is in China, reject login (must use backend-cn)
+    const { detectIPLocation } = require('../utils/ipDetector');
+    const ipInfo = detectIPLocation(clientIP);
+    
+    if (ipInfo.isChina && clientIP !== '127.0.0.1' && clientIP !== '::1') {
+      return res.status(403).json({
+        success: false,
+        error: 'This API is only for global region users. Please use the China API (backend-cn) to login.'
+      });
+    }
 
     const supabase = getSupabaseClient();
     
@@ -255,156 +234,9 @@ const emailLogin = async (req, res) => {
     }
     
     if (!user) {
-
-      // Check if already registered in CloudBase (China database)
-      const { cloudbaseApp, getCloudbaseDB } = require('../config/database');
-      if (cloudbaseApp) {
-        try {
-
-          const cloudbaseService = require('../services/cloudbaseService');
-          const userInCloudBase = await cloudbaseService.findUserByEmail(email);
-
-          // If user found in CloudBase, allow cross-region login (verify password)
-          if (userInCloudBase) {
-
-            // Verify password (use password hash from CloudBase)
-            if (!userInCloudBase.password_hash) {
-
-              return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-              });
-            }
-
-            const isValid = await bcrypt.compare(password, userInCloudBase.password_hash);
-            if (!isValid) {
-
-              return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-              });
-            }
-
-            // Generate token (use cn region)
-            const token = generateToken({
-              userId: (userInCloudBase._id || userInCloudBase.id).toString(),
-              email: userInCloudBase.email,
-              region: 'cn'
-            });
-            
-            // Save session to Supabase (because current backend is global)
-
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 7);
-            
-            try {
-              await supabase
-                .from('user_sessions')
-                .insert({
-                  user_id: (userInCloudBase._id || userInCloudBase.id).toString(),
-                  token,
-                  region: 'cn',
-                  ip_address: clientIP,
-                  expires_at: expiresAt.toISOString()
-                });
-
-            } catch (sessionError) {
-
-            }
-            
-            // Query user's complete information (including subscription info)
-            let fullUser = {
-              id: (userInCloudBase._id || userInCloudBase.id).toString(),
-              email: userInCloudBase.email,
-              name: userInCloudBase.name || null,
-              subscription_type: userInCloudBase.subscription_type || null,
-              subscription_expires_at: userInCloudBase.subscription_expires_at || null,
-              region: 'cn'
-            };
-            
-            // If subscription field is null, calculate membership status from payment_orders
-            if (!fullUser.subscription_type || !fullUser.subscription_expires_at) {
-
-              try {
-                // Query payment_orders in CloudBase
-                const db = getCloudbaseDB();
-                if (db) {
-                  const result = await db.collection('payment_orders')
-                    .where({
-                      user_id: fullUser.id,
-                      payment_status: 'paid'
-                    })
-                    .orderBy('paid_at', 'asc')
-                    .get();
-                  
-                  const allPaidOrders = result.data || [];
-                  
-                  if (allPaidOrders && allPaidOrders.length > 0) {
-                    // 计算会员状态（和国内登录逻辑一样）
-                    let currentExpiresAt = null;
-                    let finalSubscriptionType = null;
-                    const now = new Date();
-                    
-                    for (const order of allPaidOrders) {
-                      const paidAt = order.paid_at ? new Date(order.paid_at) : new Date(order.created_at);
-                      const orderData = order.payment_provider_response || {};
-                      
-                      let orderExpiresAt = null;
-                      let orderSubscriptionType = null;
-                      
-                      // 解析订单数据，计算到期时间
-                      if (order.description && order.description.includes('Monthly')) {
-                        orderSubscriptionType = 'monthly';
-                        orderExpiresAt = new Date(paidAt);
-                        orderExpiresAt.setMonth(orderExpiresAt.getMonth() + 1);
-                      } else if (order.description && order.description.includes('Yearly')) {
-                        orderSubscriptionType = 'yearly';
-                        orderExpiresAt = new Date(paidAt);
-                        orderExpiresAt.setFullYear(orderExpiresAt.getFullYear() + 1);
-                      }
-                      
-                      if (orderExpiresAt) {
-                        if (!currentExpiresAt || orderExpiresAt > currentExpiresAt) {
-                          currentExpiresAt = orderExpiresAt;
-                          finalSubscriptionType = orderSubscriptionType;
-                        }
-                      }
-                    }
-                    
-                    if (currentExpiresAt && currentExpiresAt > now) {
-                      fullUser.subscription_type = finalSubscriptionType;
-                      fullUser.subscription_expires_at = currentExpiresAt.toISOString();
-
-                    }
-                  }
-                }
-              } catch (calcError) {
-
-              }
-            }
-
-            return res.json({
-              success: true,
-              data: {
-                user: {
-                  id: fullUser.id,
-                  email: fullUser.email,
-                  name: fullUser.name || null,
-                  subscription_type: fullUser.subscription_type || null,
-                  subscription_expires_at: fullUser.subscription_expires_at || null,
-                  region: 'cn'
-                },
-                token
-              }
-            });
-          }
-        } catch (checkError) {
-
-        }
-      } else {
-
-      }
-
+      // User not found in Supabase
+      // backend-global only supports global region users
+      // If user registered in China, they need to register again in global region
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
@@ -486,41 +318,20 @@ const getCurrentUser = async (req, res) => {
     const userRegion = decoded.region || 'global';
     const userId = decoded.userId;
     
+    // backend-global only supports global region users
+    // If user registered in China, they need to use backend-cn
+    if (userRegion === 'cn') {
+      return res.status(403).json({
+        success: false,
+        error: 'This API is only for global region users. Please use the China API (backend-cn).'
+      });
+    }
+    
     let user = null;
     let error = null;
     
-    // Query from the database where user is registered
-    if (userRegion === 'cn') {
-      // User registered in CloudBase, query from there
-      const { cloudbaseApp } = require('../config/database');
-      if (cloudbaseApp) {
-        try {
-          const cloudbaseService = require('../services/cloudbaseService');
-          const cloudbaseUser = await cloudbaseService.getUserById(userId);
-          
-          if (cloudbaseUser) {
-            // Convert CloudBase user format to API response format
-            user = {
-              id: (cloudbaseUser._id || cloudbaseUser.id).toString(),
-              email: cloudbaseUser.email,
-              name: cloudbaseUser.name,
-              subscription_type: cloudbaseUser.subscription_type || null,
-              subscription_expires_at: cloudbaseUser.subscription_expires_at 
-                ? (cloudbaseUser.subscription_expires_at instanceof Date 
-                    ? cloudbaseUser.subscription_expires_at.toISOString() 
-                    : cloudbaseUser.subscription_expires_at)
-                : null,
-              region: cloudbaseUser.region || 'cn'
-            };
-          }
-        } catch (cloudbaseError) {
-          // If CloudBase query fails, continue to try Supabase as fallback
-        }
-      }
-    }
-    
-    // If user not found in CloudBase (or userRegion is 'global'), query Supabase
-    if (!user) {
+    // Query from Supabase only (global region)
+    {
       const supabase = getSupabaseClient();
       
       // Ensure userId type matches (Supabase id is bigint, need to convert to number or string)
@@ -618,85 +429,64 @@ const getCurrentUser = async (req, res) => {
     }
 
     // If subscription field is null or doesn't exist, calculate membership status from payment_orders
-    // For CloudBase users, query from CloudBase; for Supabase users, query from Supabase
+    // Query from Supabase payment_orders only (global region)
     if (!user.subscription_type || !user.subscription_expires_at) {
       try {
         let allPaidOrders = [];
         let ordersError = null;
         
-        if (userRegion === 'cn') {
-          // Query from CloudBase payment_orders
-          const { getCloudbaseDB } = require('../config/database');
-          const db = getCloudbaseDB();
-          if (db) {
-            try {
-              const result = await db.collection('payment_orders')
-                .where({
-                  user_id: user.id,
-                  payment_status: 'paid'
-                })
-                .orderBy('paid_at', 'asc')
-                .get();
-              
-              allPaidOrders = result.data || [];
-            } catch (cloudbaseError) {
-              ordersError = cloudbaseError;
-            }
-          }
-        } else {
-          // Query from Supabase payment_orders
-          const supabase = getSupabaseClient();
-          let result = await supabase
+        // Query from Supabase payment_orders
+        const supabase = getSupabaseClient();
+        let result = await supabase
+          .from('payment_orders')
+          .select('payment_provider_response, paid_at, payment_status, created_at, updated_at, description')
+          .eq('user_id', user.id)
+          .eq('payment_status', 'paid')
+          .order('paid_at', { ascending: true });
+        
+        allPaidOrders = result.data;
+        ordersError = result.error;
+        
+        // If paid_at field doesn't exist, try using created_at for sorting
+        if (ordersError && ordersError.code === '42703') {
+          result = await supabase
             .from('payment_orders')
-            .select('payment_provider_response, paid_at, payment_status, created_at, updated_at, description')
+            .select('payment_provider_response, payment_status, created_at, updated_at, description')
             .eq('user_id', user.id)
             .eq('payment_status', 'paid')
-            .order('paid_at', { ascending: true });
-          
+            .order('created_at', { ascending: true });
           allPaidOrders = result.data;
           ordersError = result.error;
-          
-          // If paid_at field doesn't exist, try using created_at for sorting
-          if (ordersError && ordersError.code === '42703') {
-            result = await supabase
-              .from('payment_orders')
-              .select('payment_provider_response, payment_status, created_at, updated_at, description')
-              .eq('user_id', user.id)
-              .eq('payment_status', 'paid')
-              .order('created_at', { ascending: true });
-            allPaidOrders = result.data;
-            ordersError = result.error;
-          }
-          
-          // If description field doesn't exist, only query payment_provider_response
-          if (ordersError && ordersError.code === '42703' && ordersError.message?.includes('description')) {
-            result = await supabase
-              .from('payment_orders')
-              .select('payment_provider_response, payment_status, created_at, updated_at, paid_at')
-              .eq('user_id', user.id)
-              .eq('payment_status', 'paid')
-              .order('created_at', { ascending: true });
-            allPaidOrders = result.data;
-            ordersError = result.error;
-          }
-          
-          // If still fails, try querying all without sorting
-          if (ordersError && ordersError.code === '42703') {
-            result = await supabase
-              .from('payment_orders')
-              .select('payment_provider_response, payment_status, created_at, updated_at')
-              .eq('user_id', user.id)
-              .eq('payment_status', 'paid');
-            allPaidOrders = result.data;
-            ordersError = result.error;
-            // Manually sort by created_at
-            if (allPaidOrders && allPaidOrders.length > 0) {
-              allPaidOrders.sort((a, b) => {
-                const timeA = new Date(a.created_at || 0).getTime();
-                const timeB = new Date(b.created_at || 0).getTime();
-                return timeA - timeB;
-              });
-            }
+        }
+        
+        // If description field doesn't exist, only query payment_provider_response
+        if (ordersError && ordersError.code === '42703' && ordersError.message?.includes('description')) {
+          result = await supabase
+            .from('payment_orders')
+            .select('payment_provider_response, payment_status, created_at, updated_at, paid_at')
+            .eq('user_id', user.id)
+            .eq('payment_status', 'paid')
+            .order('created_at', { ascending: true });
+          allPaidOrders = result.data;
+          ordersError = result.error;
+        }
+        
+        // If still fails, try querying all without sorting
+        if (ordersError && ordersError.code === '42703') {
+          result = await supabase
+            .from('payment_orders')
+            .select('payment_provider_response, payment_status, created_at, updated_at')
+            .eq('user_id', user.id)
+            .eq('payment_status', 'paid');
+          allPaidOrders = result.data;
+          ordersError = result.error;
+          // Manually sort by created_at
+          if (allPaidOrders && allPaidOrders.length > 0) {
+            allPaidOrders.sort((a, b) => {
+              const timeA = new Date(a.created_at || 0).getTime();
+              const timeB = new Date(b.created_at || 0).getTime();
+              return timeA - timeB;
+            });
           }
         }
 

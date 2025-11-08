@@ -482,7 +482,7 @@ const createPayment = async (req, res) => {
  * @param {string} planDescription - Order description, e.g. "Pro Plan - Pro Monthly"
  * @param {string} dbRegion - 'cn' or 'global'
  */
-const updateUserSubscriptionAfterPayment = async (userId, planDescription, dbRegion, syncToBoth = false) => {
+const updateUserSubscriptionAfterPayment = async (userId, planDescription, dbRegion) => {
   try {
     // Extract plan type from description (supports multiple formats)
     let subscriptionType = null;
@@ -613,38 +613,6 @@ const updateUserSubscriptionAfterPayment = async (userId, planDescription, dbReg
           // Update user subscription
           updatedExpiresAt = expiresAt;
           await cloudbaseService.updateUserSubscription(userId, subscriptionType, expiresAt);
-
-          // If syncToBoth is true, also update Supabase
-          if (syncToBoth) {
-            try {
-              const { supabaseGlobal } = require('../config/database');
-              if (supabaseGlobal) {
-                // Try to find user in Supabase by email (if available) or create mapping
-                // For now, we'll try to update by finding user with same email from CloudBase
-                const userData = await db.collection('users').doc(userId).get();
-                if (userData && userData.data && userData.data.email) {
-                  const { data: supabaseUser } = await supabaseGlobal
-                    .from('users')
-                    .select('id')
-                    .eq('email', userData.data.email)
-                    .maybeSingle();
-                  
-                  if (supabaseUser && supabaseUser.id) {
-                    await supabaseGlobal
-                      .from('users')
-                      .update({
-                        subscription_type: subscriptionType,
-                        subscription_expires_at: expiresAt.toISOString(),
-                        updated_at: new Date().toISOString()
-                      })
-                      .eq('id', supabaseUser.id);
-                  }
-                }
-              }
-            } catch (syncError) {
-              // Don't fail if sync fails
-            }
-          }
 
           // Verify if update succeeded (wait a bit for database sync)
           await new Promise(resolve => setTimeout(resolve, 1500)); // Increase wait time
@@ -795,35 +763,6 @@ const updateUserSubscriptionAfterPayment = async (userId, planDescription, dbReg
           if (!updateError) {
             updatedExpiresAt = expiresAt;
             
-            // If syncToBoth is true, also update CloudBase
-            if (syncToBoth) {
-              try {
-                const { cloudbaseApp } = require('../config/database');
-                const cloudbaseService = require('../services/cloudbaseService');
-                if (cloudbaseApp) {
-                  // Try to find user in CloudBase by email
-                  const { data: supabaseUser } = await supabaseGlobal
-                    .from('users')
-                    .select('email')
-                    .eq('id', updateUserId)
-                    .single();
-                  
-                  if (supabaseUser && supabaseUser.email) {
-                    const db = cloudbaseApp.database();
-                    const cloudbaseUserResult = await db.collection('users')
-                      .where({ email: supabaseUser.email })
-                      .get();
-                    
-                    if (cloudbaseUserResult.data && cloudbaseUserResult.data.length > 0) {
-                      const cloudbaseUserId = cloudbaseUserResult.data[0]._id || cloudbaseUserResult.data[0].id;
-                      await cloudbaseService.updateUserSubscription(cloudbaseUserId, subscriptionType, expiresAt);
-                    }
-                  }
-                }
-              } catch (syncError) {
-                // Don't fail if sync fails
-              }
-            }
             
             // Update succeeded, verify it after a delay
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -887,10 +826,8 @@ const confirmPayment = async (req, res) => {
     }
     
     // First try to query order, determine which database the order is stored in
-    // This is important because order might be created in different database than user's registered database
     let order = null;
     let orderDbRegion = null; // Database where the order is stored
-    let userRegisteredRegion = userRegion; // User's registered database region (from token)
     
     // First try to find order in CloudBase
     if (cloudbaseApp) {
@@ -934,17 +871,13 @@ const confirmPayment = async (req, res) => {
     }
     
     // Determine which database to use for updating subscription
-    // Priority: Use user's registered region (from token) if available
-    // If not available, use order's region as fallback
-    // CRITICAL: Use user's registered region (from token) as priority for subscription update
-    // This ensures that if user registered in CloudBase but order is in Supabase,
-    // we still update CloudBase (user's actual database)
-    const dbRegion = userRegisteredRegion || orderDbRegion || (order.region || 'global');
+    // Use order's database region (where the order is stored)
+    // No cross-database sync: subscription updates to the same database as the order
+    const dbRegion = orderDbRegion || (order.region || 'global');
     
     // Log for debugging
     if (process.env.NODE_ENV === 'development') {
       console.log('[confirmPayment] Subscription update region:', {
-        userRegisteredRegion,
         orderDbRegion,
         orderRegion: order.region,
         finalDbRegion: dbRegion,
@@ -1283,35 +1216,24 @@ const confirmPayment = async (req, res) => {
           // Wait a bit before updating subscription to ensure order is fully saved
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // CRITICAL: Always use user's registered region for subscription update
-          // If user registered in CloudBase (cn), update CloudBase even if order is in Supabase
-          const subscriptionUpdateRegion = userRegisteredRegion || dbRegion;
-          
-          // Determine if we need to sync to both databases
-          // If user registered in one region but order is in another region, sync to both
-          const needSync = userRegisteredRegion && userRegisteredRegion !== orderDbRegion;
-          
+          // Update subscription in the same database as the order
+          // No cross-database sync: subscription updates to order's database
           // Log for debugging
           if (process.env.NODE_ENV === 'development') {
             console.log('[confirmPayment] Updating subscription:', {
               userId: order.user_id.toString(),
               planDescription,
-              subscriptionUpdateRegion,
-              needSync,
-              userRegisteredRegion,
-              orderDbRegion,
-              dbRegion
+              dbRegion,
+              orderDbRegion
             });
           }
           
-          // Update subscription in user's registered database (subscriptionUpdateRegion)
-          // This ensures CloudBase users always get updated in CloudBase, even if order is in Supabase
+          // Update subscription in order's database
           try {
             await updateUserSubscriptionAfterPayment(
               order.user_id.toString(), 
               planDescription, 
-              subscriptionUpdateRegion, 
-              needSync
+              dbRegion
             );
             
             // Wait additional time for database to sync
@@ -1319,7 +1241,7 @@ const confirmPayment = async (req, res) => {
             
             // Verify update succeeded
             if (process.env.NODE_ENV === 'development') {
-              console.log('[confirmPayment] Subscription update completed for region:', subscriptionUpdateRegion);
+              console.log('[confirmPayment] Subscription update completed for region:', dbRegion);
             }
           } catch (updateSubError) {
             // Log error but don't fail the payment confirmation

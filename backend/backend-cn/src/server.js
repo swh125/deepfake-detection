@@ -55,9 +55,15 @@ app.use(errorHandler);
 
 // 云函数模式下不需要监听端口，直接导出 app
 // 本地开发时如果需要，可以取消注释
-// app.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
+// 判断是否为云函数环境（通过环境变量或运行时环境）
+if (require.main === module) {
+  // 直接运行 node src/server.js 时，启动本地服务器
+  app.listen(PORT, () => {
+    console.log(`🚀 China Backend Server running on port ${PORT}`);
+    console.log(`📍 Health check: http://localhost:${PORT}/health`);
+    console.log(`🇨🇳 Region: China (CloudBase)`);
+  });
+}
 
 module.exports = app;
 
