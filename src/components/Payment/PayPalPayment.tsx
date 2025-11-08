@@ -309,7 +309,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     intent: 'capture' as const,
     // Force PayPal account login (disable direct credit card payment)
     // This requires login to PayPal account on first use
-    disableFunding: 'card,credit,paylater,venmo',
+    disableFunding: 'card,credit,paylater,venmo,sepa',
     enableFunding: 'paypal',
     // Don't save user info, force login every time
     // Note: PayPal may save login state in browser (via cookies)
