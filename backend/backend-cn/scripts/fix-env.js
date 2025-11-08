@@ -41,9 +41,9 @@ for (let i = 0; i < lines.length; i++) {
 // 添加云开发配置
 newLines.push('');
 newLines.push('# 云开发（CloudBase）配置');
-newLines.push('CLOUDBASE_ENV_ID=cloud1-3giwb8x723267ff3');
-newLines.push('CLOUDBASE_SECRET_ID=AKIDb2LTP8mNn12rUwBD3pfU9czOjusdCcqr');
-newLines.push('CLOUDBASE_SECRET_KEY=yuoZ9lLlz75rQmvrcDcrvnRt9C2g7MPG');
+newLines.push('CLOUDBASE_ENV_ID=your_cloudbase_env_id');
+newLines.push('CLOUDBASE_SECRET_ID=your_secret_id');
+newLines.push('CLOUDBASE_SECRET_KEY=your_secret_key');
 
 // 写入文件
-fs.writeFileSync(envPath, newLines.join('\n'), 'utf8');
+fs.writeFileSync(envPath, newLines.join('\n'), 'utf8');
