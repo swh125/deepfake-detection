@@ -156,22 +156,22 @@ const emailRegister = async (req, res) => {
       }
     });
   } catch (error) {
-
-    // Return more detailed error information (development environment)
-    const errorResponse = {
+    // Log error for debugging
+    console.error('Registration error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Return more detailed error information (always show details for troubleshooting)
+    return res.status(500).json({
       success: false,
-      error: error.message || 'Registration failed'
-    };
-    
-    if (process.env.NODE_ENV === 'development') {
-      errorResponse.details = {
+      error: error.message || 'Registration failed',
+      details: {
         name: error.name,
-        message: error.message,
-        stack: error.stack
-      };
-    }
-    
-    return res.status(500).json(errorResponse);
+        message: error.message
+      }
+    });
   }
 };
 
