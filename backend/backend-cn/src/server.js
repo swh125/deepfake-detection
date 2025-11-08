@@ -21,8 +21,39 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 app.use(helmet());
+// CORS configuration - support multiple frontend URLs
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3006',
+  'https://www.shuwen.online',
+  'https://shuwen.online',
+  'https://deepfake-detection-3cmt.vercel.app' // Keep old domain for backward compatibility
+];
+// Add FRONTEND_URL from environment if it exists
+if (process.env.FRONTEND_URL) {
+  const frontendUrl = process.env.FRONTEND_URL;
+  // Handle both string and array formats
+  if (Array.isArray(frontendUrl)) {
+    allowedOrigins.push(...frontendUrl);
+  } else {
+    allowedOrigins.push(frontendUrl);
+  }
+}
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:3006'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // For development, allow all origins
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true
 }));
 app.use(morgan('dev'));
@@ -58,7 +89,8 @@ app.use(errorHandler);
 // 判断是否为云函数环境（通过环境变量或运行时环境）
 if (require.main === module) {
   // 直接运行 node src/server.js 时，启动本地服务器
-  app.listen(PORT, () => {
+  // 监听 0.0.0.0 以支持 Railway/Render 等云平台
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 China Backend Server running on port ${PORT}`);
     console.log(`📍 Health check: http://localhost:${PORT}/health`);
     console.log(`🇨🇳 Region: China (CloudBase)`);
