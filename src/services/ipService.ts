@@ -120,7 +120,7 @@ const detectIPFromThirdParty = async (): Promise<IPInfo> => {
   // Priority to use ipapi.co (most reliable, free and provides complete information)
 
   try {
-    const response = await axios.get('https://ipapi.co/json/', { timeout: 8000 });
+    const response = await axios.get('https://ipapi.co/json/', { timeout: 3000 });
     const data = response.data;
 
     let country = null;
@@ -176,7 +176,7 @@ const detectIPFromThirdParty = async (): Promise<IPInfo> => {
   for (const api of apis) {
     try {
 
-      const response = await axios.get(api.url, { timeout: 8000 });
+      const response = await axios.get(api.url, { timeout: 3000 });
       const data = response.data;
 
       let country = null;

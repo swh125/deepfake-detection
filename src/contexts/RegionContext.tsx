@@ -102,7 +102,26 @@ export const RegionProvider: React.FC<RegionProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Only detect once when component mounts (even React.StrictMode will skip through hasDetected flag)
-    detectRegion();
+    // Don't await - let it run in background to avoid blocking page load
+    // Set a default region immediately so page can load
+    if (!hasDetected) {
+      // Set default region first
+      const defaultInfo: IPInfo = {
+        ip: 'unknown',
+        country: null,
+        isChina: false,
+        recommendedRegion: 'global',
+        detectedAt: new Date().toISOString()
+      };
+      setRegionInfo(defaultInfo);
+      setLoading(false);
+      
+      // Then detect in background
+      detectRegion().catch(err => {
+        // Silently handle errors to prevent blocking
+        console.error('Region detection error:', err);
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array, only execute once
 
