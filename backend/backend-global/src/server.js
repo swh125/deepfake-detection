@@ -29,8 +29,39 @@ const app = express();
 const PORT = process.env.PORT || 8001;
 
 app.use(helmet());
+// CORS configuration - support multiple frontend URLs
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3006',
+  'https://www.shuwen.online',
+  'https://shuwen.online',
+  'https://deepfake-detection-3cmt.vercel.app' // Keep old domain for backward compatibility
+];
+// Add FRONTEND_URL from environment if it exists
+if (process.env.FRONTEND_URL) {
+  const frontendUrl = process.env.FRONTEND_URL;
+  // Handle both string and array formats
+  if (Array.isArray(frontendUrl)) {
+    allowedOrigins.push(...frontendUrl);
+  } else {
+    allowedOrigins.push(frontendUrl);
+  }
+}
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:3006'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // For development, allow all origins
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true
 }));
 app.use(morgan('dev'));
