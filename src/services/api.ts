@@ -25,7 +25,8 @@ let initialBaseUrl = (() => {
     // Ignore error
   }
   // If no IP info yet, return a temporary address, will be updated after IP detection
-  return 'http://localhost:8001'; // Temporary address
+  // Use environment variable if available, otherwise default to global backend
+  return process.env.REACT_APP_API_URL_GLOBAL || 'http://localhost:8001'; // Temporary address
 })();
 
 // API Configuration - use dynamic configuration
