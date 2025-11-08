@@ -60,7 +60,7 @@ const getCountryName = (countryCode: string | null): string => {
 };
 
 const RegionIndicator: React.FC = () => {
-  const { isChina, label, loading, regionInfo } = useRegion();
+  const { isChina, loading, regionInfo } = useRegion();
 
   if (loading) {
     return (

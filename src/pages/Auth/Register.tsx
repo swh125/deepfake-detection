@@ -19,7 +19,7 @@ import toast from 'react-hot-toast';
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const { register, getWechatQRCode, wechatLogin, googleLogin, loading: authLoading } = useAuth();
-  const { region, isChina } = useRegion();
+  const { isChina } = useRegion();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +30,6 @@ const Register: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [wechatAuthUrl, setWechatAuthUrl] = useState('');
   const [isWechatMock, setIsWechatMock] = useState(true);
-  const [wechatTicket, setWechatTicket] = useState('');
   const [showGoogleDialog, setShowGoogleDialog] = useState(false);
 
   const handleEmailRegister = async (e: React.FormEvent) => {
@@ -76,7 +75,6 @@ const Register: React.FC = () => {
       setQrCodeUrl(qrData.qrCodeUrl);
       setWechatAuthUrl(qrData.authUrl || '');
       setIsWechatMock(qrData.isMock);
-      setWechatTicket(qrData.ticket);
       setShowWechatQR(true);
       
       // 如果是真实OAuth，显示二维码让用户扫码
@@ -114,8 +112,7 @@ const Register: React.FC = () => {
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === 'WECHAT_LOGIN_SUCCESS') {
-        const { token, user } = event.data;
-
+        // token and user are used implicitly
         toast.success('WeChat registration successful!');
         navigate('/', { replace: true });
       } else if (event.data.type === 'WECHAT_LOGIN_ERROR') {

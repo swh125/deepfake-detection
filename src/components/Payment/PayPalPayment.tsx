@@ -6,7 +6,6 @@ import {
   Typography,
   CircularProgress
 } from '@mui/material';
-import { getRegionConfig } from '../../config/regionConfig';
 import api from '../../services/api';
 
 interface PayPalPaymentProps {
@@ -99,7 +98,6 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   const [processing, setProcessing] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
-  const [hasPayPalAccount, setHasPayPalAccount] = useState<boolean>(false);
 
   // Use a counter to force re-initialization when orderNo changes
   const [initKey, setInitKey] = useState(0);
@@ -118,7 +116,6 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   useEffect(() => {
     const savedPayPalAccount = localStorage.getItem('paypal_account_logged_in');
     if (savedPayPalAccount === 'true') {
-      setHasPayPalAccount(true);
 
     } else {
 
@@ -229,7 +226,6 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       // If payment success, user has logged into PayPal account, save login status
       if (data.payerID) {
         localStorage.setItem('paypal_account_logged_in', 'true');
-        setHasPayPalAccount(true);
 
       }
       
@@ -250,7 +246,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 
       // After payment success, update order status
       try {
-        const confirmResponse = await api.post('/api/v1/payment/confirm', {
+        await api.post('/api/v1/payment/confirm', {
           order_no: orderNo,
           payment_provider_order_id: data.orderID,
           payment_status: 'paid',

@@ -15,11 +15,10 @@ import {
   useMediaQuery,
   Button,
   Stack,
-  Badge,
   Tooltip,
   alpha,
 } from '@mui/material';
-import { Brightness4, Brightness7, Settings as SettingsIcon, Login as LoginIcon, AppRegistration as RegisterIcon, CreditCard as PayIcon, WorkspacePremium as ProIcon, CheckCircle, Schedule } from '@mui/icons-material';
+import { Brightness4, Brightness7, Settings as SettingsIcon, Login as LoginIcon, AppRegistration as RegisterIcon, WorkspacePremium as ProIcon, CheckCircle, Schedule } from '@mui/icons-material';
 import {
   Dashboard as DashboardIcon,
   Security as SecurityIcon,
@@ -32,7 +31,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useColorMode } from '../../theme/ColorModeProvider';
 import { useAuth } from '../../contexts/AuthContext';
 import RegionIndicator from '../RegionIndicator/RegionIndicator';
-import { Avatar, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import { Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import { Logout as LogoutIcon, Person as PersonIcon } from '@mui/icons-material';
 
 interface LayoutProps {

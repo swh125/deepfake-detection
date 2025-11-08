@@ -20,7 +20,6 @@ import {
   IconButton
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { getRegionConfig } from '../../config/regionConfig';
 import api from '../../services/api';
 import { STRIPE_PUBLISHABLE_KEY } from '../../config/env';
 
@@ -151,7 +150,7 @@ const StripePaymentForm: React.FC<StripePaymentProps & { isConfigured: boolean }
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         // After payment success, update order status
         try {
-          const response = await api.post('/api/v1/payment/confirm', {
+          await api.post('/api/v1/payment/confirm', {
             order_no: orderNo,
             payment_provider_order_id: paymentIntent.id,
             payment_status: 'paid',
