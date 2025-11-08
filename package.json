@@ -1,0 +1,70 @@
+{
+  "name": "deepfake-detection-frontend",
+  "version": "1.0.0",
+  "description": "AI Deepfake Detection System Frontend",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.1",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.5",
+    "web-vitals": "^3.3.1",
+    "@mui/material": "^5.11.10",
+    "@mui/icons-material": "^5.11.9",
+    "@emotion/react": "^11.10.6",
+    "@emotion/styled": "^11.10.6",
+    "@mui/x-data-grid": "^6.18.0",
+    "echarts": "^5.4.2",
+    "echarts-for-react": "^3.0.2",
+    "axios": "^1.3.4",
+    "react-dropzone": "^14.2.3",
+    "react-webcam": "^7.0.1",
+    "socket.io-client": "^4.6.1",
+    "date-fns": "^2.29.3",
+    "react-query": "^3.39.3",
+    "zustand": "^4.3.6",
+    "framer-motion": "^10.0.1",
+    "react-hot-toast": "^2.4.0",
+    "react-intersection-observer": "^9.4.3",
+    "@supabase/supabase-js": "^2.38.0",
+    "@react-oauth/google": "^0.11.0",
+    "@paypal/react-paypal-js": "^8.1.3",
+    "@stripe/stripe-js": "^2.1.7",
+    "@stripe/react-stripe-js": "^2.4.0",
+    "geoip-lite": "^1.4.7",
+    "country-flag-icons": "^1.5.11",
+    "dotenv": "^16.3.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.0",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@types/react-dropzone": "^5.1.0",
+    "@types/geoip-lite": "^1.4.4"
+  }
+} 
